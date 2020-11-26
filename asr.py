@@ -118,6 +118,7 @@ def generate_target_output_from_text(target_text):
     y = []
     for char in target_text:
         y.append(char_to_index[char])
+    y.append(char_to_index[end_token])
     return y
 
 
@@ -143,10 +144,14 @@ def num_to_char(arr):
 
 
 # A utility function to decode the output of the network
-def decode_batch_predictions(pred):
+def decode_batch_predictions(pred,greedy=True):
     input_len = np.ones(pred.shape[0]) * pred.shape[1]
     # Use greedy search. For complex tasks, you can use beam search
-    results = tf.keras.backend.ctc_decode(pred, input_length=input_len, greedy=True)[0][0]
+    if greedy:
+        results = tf.keras.backend.ctc_decode(pred, input_length=input_len, greedy=greedy)[0][0]
+    else:
+        results = tf.keras.backend.ctc_decode(pred, input_length=input_len, beam_width=3)[0][0]
+
     # Iterate over the results and get back the text
     output_text = []
     for res in results:
@@ -167,14 +172,12 @@ if __name__ == '__main__':
     print('Target shape: {}'.format(y.shape))
 
     #model = ASR(200, 11, 2, 'valid', 200, 29)
-    model = build_model(89,584,129,200, 11, 2, 'valid', 200, 29)
-    #optimizer = tf.keras.optimizers.Adam()
-    #train(model, optimizer, X, y, 1)
+    model = build_model(90,584,129,200, 11, 2, 'valid', 200, 29)
     model.summary()
-    #pdb.set_trace()
 
     epochs = 100
     early_stopping_patience = 10
+
     # Add early stopping
     early_stopping = tf.keras.callbacks.EarlyStopping(
         monitor="loss", patience=early_stopping_patience, restore_best_weights=True
@@ -193,12 +196,12 @@ if __name__ == '__main__':
     )
     prediction_model.summary()
     ctc_output = prediction_model.predict(X)
+    
 
-    #output_text = decode_batch_predictions(ctc_output)
-    #print(output_text)
-    #print('\n\nNote: Applying a good decoder on this output will give you readable output')
+    output_text = decode_batch_predictions(ctc_output,False)
+    print(output_text)
     
-    
+    '''
     # greedy decoding
     space_token = ' '
     end_token = '>'
@@ -209,5 +212,5 @@ if __name__ == '__main__':
     for timestep in ctc_output[0]:
         output_text += alphabet[tf.math.argmax(timestep)]
     print(output_text)
-    print('\n\nNote: Applying a good decoder on this output will give you readable output')
+    '''
     
