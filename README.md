@@ -14,6 +14,9 @@ The input transcript (for training) is the following:<br/>
 MISTER QUILTER IS THE APOSTLE OF THE MIDDLE CLASSES AND WE ARE GLAD TO WELCOME HIS GOSPEL
 
 The output will be a over-fit model to a specific audio file sample.wav from LibreSpeech corpus (5s).  The output will look something like this:<br/>
-miistteerrr%%  %%%%%%%%%%%%uuiilltt%%%%%eerr  iiiss%%%%%%%%%   %tthee  aa%%%%%%%ppoooossttllee ooff%%%%%%  tthhe  %%%%%%%%%%%%%%%%mmiii%dd%dddlllee  cccllas%%sees  aaaannddd  wwwee%%%%  %%aarrreee   %ggllaadd%%%%%  tttoo   %%%%%%%%%%%wweelcc%%%%%%ooommee  hh%%%ii%%ss  ggoo%%%%%%%ssppeel<br/><br/><br/>
+Epoch 100/100<br/>
+1/1 [==============================] - 1s 516ms/sample - loss: 3.4581 <br/>
 
-I'm not really interested in working on language models, but more interested in alignment of words with samples of audio, so the ctc decoding output is all I need for this excercise.
+['mister quilter is the apostle of the middle classes and we are glad to welcome his gospel>']<br/><br/><br/>
+
+You can use beam search in various ways using the decode_batch_predictions function.
