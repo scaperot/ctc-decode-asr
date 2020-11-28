@@ -37,9 +37,31 @@ def build_model(Ly,Tx,nx,filters, kernel_size, conv_stride, conv_border, n_lstm_
                                              strides=conv_stride,
                                              padding=conv_border,
                                              activation='relu',name="1DConv1")(input_audio)
+
+    x = x[:,::2,:] #decimation
+
+    # Inputs to the model
+    x = tf.keras.layers.Conv1D(2 * filters,
+                                             kernel_size,
+                                             strides=conv_stride,
+                                             padding=conv_border,
+                                             activation='relu',name="1DConv2")(x)
+    x = x[:,::2,:]
+
+    # Inputs to the model
+    x = tf.keras.layers.Conv1D(3 * filters,
+                                             kernel_size,
+                                             strides=conv_stride,
+                                             padding=conv_border,
+                                             activation='relu',name="1DConv3")(x)
+
+
+
+
     lstm_layer = tf.keras.layers.LSTM(n_lstm_units,
                                            return_sequences=True,
                                            activation='tanh')
+
     lstm_layer_back = tf.keras.layers.LSTM(n_lstm_units,
                                                 return_sequences=True,
                                                 go_backwards=True,
@@ -116,8 +138,12 @@ def generate_target_output_from_text(target_text):
         char_to_index[char] = idx
 
     y = []
+    prev_char = ''
     for char in target_text:
+    #    if prev_char == char:
+    #        y.append(char_to_index[blank_token]) # for the case where there are double letters.
         y.append(char_to_index[char])
+    #    prev_char = char
     y.append(char_to_index[end_token])
     return y
 
@@ -141,6 +167,15 @@ def num_to_char(arr):
 
     return o
 
+def ctc_output_with_time(x,sr,frame_step=80,stride_len=2):
+    '''
+    x = list of characters of size l
+    '''
+    len_characters   = len(x)
+    characters       = np.reshape(np.array(list(x)),(1,len_characters))
+    time_steps       = np.reshape(np.arange(len_characters) * (stride_len * frame_step / sr),(1,len_characters))
+
+    return np.concatenate((characters.T,time_steps.T),axis=1)
 
 
 # A utility function to decode the output of the network
@@ -171,8 +206,9 @@ if __name__ == '__main__':
     print('Input shape: {}'.format(X.shape))
     print('Target shape: {}'.format(y.shape))
 
-    #model = ASR(200, 11, 2, 'valid', 200, 29)
-    model = build_model(90,584,129,200, 11, 2, 'valid', 200, 29)
+
+    #                   92        ,584       ,129
+    model = build_model(y.shape[1],X.shape[1],X.shape[2],24, 15, 1, 'valid', 200, 29)
     model.summary()
 
     epochs = 100
@@ -198,19 +234,26 @@ if __name__ == '__main__':
     ctc_output = prediction_model.predict(X)
     
 
-    output_text = decode_batch_predictions(ctc_output,False)
-    print(output_text)
+
     
-    '''
     # greedy decoding
     space_token = ' '
     end_token = '>'
     blank_token = '%'
     alphabet = list(ascii_lowercase) + [space_token, end_token, blank_token]
 
+    #lm_string = prefix_beam_search(ctc_output,alphabet,blank_token,end_token,space_token,lm)
     output_text = ''
     for timestep in ctc_output[0]:
         output_text += alphabet[tf.math.argmax(timestep)]
-    print(output_text)
-    '''
-    
+    print("Timing output:", output_text)
+
+    decoded_text = decode_batch_predictions(ctc_output,False)
+    print("Decoder output:", decoded_text)
+
+    print(ctc_output_with_time(output_text,8000,80,1))
+
+    # alignment error calculations.
+    # 1. CTC provides a way to see when it thinks the word is 'complete' (i.e. spaces)
+    # 2. What seems to happen some is that there is some ambiguity and it sends blanks on the end of words
+    #    when the probability of a specific token is low.  
