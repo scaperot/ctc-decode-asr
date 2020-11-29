@@ -45,6 +45,9 @@ if __name__ == '__main__':
     # ###############################################
     #
     print("Measure the length of lines for 10 songs...")
+    #  max line length for 5358 songs: 700.2 secs
+    #  number of lines above 10 seconds: 605
+    #  time to process 5358 songs: 215.2 secs
     #
     # ###############################################
     allsongfilenames = utilities.get_files_path(dali_path,'.gz')
