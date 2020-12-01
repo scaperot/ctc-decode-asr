@@ -56,8 +56,6 @@ def build_model(Ly,Tx,nx,filters, kernel_size, conv_stride, conv_border, n_lstm_
                                              activation='relu',name="1DConv3")(x)
 
 
-
-
     lstm_layer = tf.keras.layers.LSTM(n_lstm_units,
                                            return_sequences=True,
                                            activation='tanh')
@@ -170,6 +168,7 @@ def num_to_char(arr):
 def ctc_output_with_time(x,sr,frame_step=80,stride_len=2):
     '''
     x = list of characters of size l
+    magic number...
     '''
     len_characters   = len(x)
     characters       = np.reshape(np.array(list(x)),(1,len_characters))
@@ -197,7 +196,7 @@ def decode_batch_predictions(pred,greedy=True):
 
 if __name__ == '__main__':
     sample_call = 'sample.wav'
-    transcript = 'MISTER QUILTER IS THE APOSTLE OF THE MIDDLE CLASSES AND WE ARE GLAD TO WELCOME HIS GOSPEL'.lower()
+    transcript = ' MISTER QUILTER IS THE APOSTLE OF THE MIDDLE CLASSES AND WE ARE GLAD TO WELCOME HIS GOSPEL '.lower()
 
     X = generate_input_from_audio_file(sample_call)
     X = tf.expand_dims(X, axis=0)  # converting input into a batch of size 1
@@ -207,7 +206,6 @@ if __name__ == '__main__':
     print('Target shape: {}'.format(y.shape))
 
 
-    #                   92        ,584       ,129
     model = build_model(y.shape[1],X.shape[1],X.shape[2],24, 15, 1, 'valid', 200, 29)
     model.summary()
 
