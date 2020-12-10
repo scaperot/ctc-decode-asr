@@ -165,36 +165,16 @@ def num_to_char(arr):
 
     return o
 
-def ctc_output_with_time(x,sr,frame_step=80,stride_len=2):
+def get_greedy_sequence(probabilities,alphabet):
     '''
-    x = list of characters of size l
-    magic number...
     '''
-    len_characters   = len(x)
-    characters       = np.reshape(np.array(list(x)),(1,len_characters))
-    time_steps       = np.reshape(np.arange(len_characters) * (stride_len * frame_step / sr),(1,len_characters))
-
-    return np.concatenate((characters.T,time_steps.T),axis=1)
-
-
-# A utility function to decode the output of the network
-def decode_batch_predictions(pred,greedy=True):
-    input_len = np.ones(pred.shape[0]) * pred.shape[1]
-    # Use greedy search. For complex tasks, you can use beam search
-    if greedy:
-        results = tf.keras.backend.ctc_decode(pred, input_length=input_len, greedy=greedy)[0][0]
-    else:
-        results = tf.keras.backend.ctc_decode(pred, input_length=input_len, beam_width=3)[0][0]
-
-    # Iterate over the results and get back the text
-    output_text = []
-    for res in results:
-        res = tf.strings.reduce_join(num_to_char(res.numpy())).numpy().decode("utf-8")
-        output_text.append(res)
+    output_text = ''
+    for timestep in probabilities[0]:
+        output_text += alphabet[tf.math.argmax(timestep)]
     return output_text
 
-
 if __name__ == '__main__':
+    # args: filename (str), transcript (str), re-train (bool)
     sample_call = 'sample.wav'
     transcript = ' MISTER QUILTER IS THE APOSTLE OF THE MIDDLE CLASSES AND WE ARE GLAD TO WELCOME HIS GOSPEL '.lower()
 
@@ -205,7 +185,16 @@ if __name__ == '__main__':
     print('Input shape: {}'.format(X.shape))
     print('Target shape: {}'.format(y.shape))
 
-
+    # hyperparameters:
+    # 1. size of the transcript in characters
+    # 2. number of 'timesteps'
+    # 3. number of samples per timestep.
+    # 4. number of kernels
+    # 5. size of each kernel
+    # 6. stride 
+    # 7. padding - 'valid' means no padding
+    # 8. size of LSTM activation units
+    # 9. size of dense unit on output (i.e. cooresponds to the size of the alphabet)
     model = build_model(y.shape[1],X.shape[1],X.shape[2],24, 15, 1, 'valid', 200, 29)
     model.summary()
 
@@ -231,27 +220,12 @@ if __name__ == '__main__':
     prediction_model.summary()
     ctc_output = prediction_model.predict(X)
     
-
-
-    
     # greedy decoding
     space_token = ' '
-    end_token = '>'
+    end_token = ">"
     blank_token = '%'
     alphabet = list(ascii_lowercase) + [space_token, end_token, blank_token]
-
-    #lm_string = prefix_beam_search(ctc_output,alphabet,blank_token,end_token,space_token,lm)
-    output_text = ''
-    for timestep in ctc_output[0]:
-        output_text += alphabet[tf.math.argmax(timestep)]
+    output_text = get_greedy_sequence(ctc_output,alphabet)
     print("Timing output:", output_text)
 
-    decoded_text = decode_batch_predictions(ctc_output,False)
-    print("Decoder output:", decoded_text)
-
-    print(ctc_output_with_time(output_text,8000,80,1))
-
-    # alignment error calculations.
-    # 1. CTC provides a way to see when it thinks the word is 'complete' (i.e. spaces)
-    # 2. What seems to happen some is that there is some ambiguity and it sends blanks on the end of words
-    #    when the probability of a specific token is low.  
+    np.save('ctc_output.npy',ctc_output)
