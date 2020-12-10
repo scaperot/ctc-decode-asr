@@ -15,8 +15,12 @@ def line_length_hist_secs(data):
 
 if __name__ == '__main__':
     sr = 22050
-    dali_path = '/home/das/Downloads/DALI/'
-    dali_info = dali_code.get_info(dali_path + 'info/DALI_DATA_INFO.gz')
+    if os.path.isdir('DALI/'):
+        dali_path = os.path.abspath('DALI/')
+    else:
+        print('DALI dataset not found in',os.path.abspath('.')+'/DALI/')
+        sys.exit()
+    dali_info = dali_code.get_info(dali_path + '/info/DALI_DATA_INFO.gz')
 
     # ###############################################
     #
