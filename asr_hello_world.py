@@ -3,9 +3,8 @@ import numpy as np
 import librosa
 from string import ascii_lowercase
 import argparse
-
-
 import pdb
+
 class CTCLayer(tf.keras.layers.Layer):
     def __init__(self, name=None):
         super().__init__(name=name)
@@ -139,10 +138,7 @@ def generate_target_output_from_text(target_text):
     y = []
     prev_char = ''
     for char in target_text:
-    #    if prev_char == char:
-    #        y.append(char_to_index[blank_token]) # for the case where there are double letters.
         y.append(char_to_index[char])
-    #    prev_char = char
     y.append(char_to_index[end_token])
     return y
 
