@@ -28,35 +28,27 @@ class CTCLayer(tf.keras.layers.Layer):
         return y_pred
 
 
-def build_model(Ly,Tx,nx,filters, kernel_size, conv_stride, conv_border, n_lstm_units, n_dense_units):
-    input_audio = tf.keras.layers.Input(shape=(Tx,nx),name='audio')
+def build_model(Ly,input_shape,filters, kernel_size, conv_stride, conv_border, n_lstm_units, n_dense_units):
+    input_audio = tf.keras.layers.Input(shape=input_shape[1:],name='audio')
     labels = tf.keras.layers.Input(name="label",shape=(Ly,))
 
-    # Inputs to the model
     x = tf.keras.layers.Conv1D(filters,
                                              kernel_size,
                                              strides=conv_stride,
                                              padding=conv_border,
                                              activation='relu',name="1DConv1")(input_audio)
+    x = x[:,::2,:] # Decimate by factor of 2 # out = (in-1)/2 + 1
 
-    x = x[:,::2,:] #decimation
-
-    # Inputs to the model
-    x = tf.keras.layers.Conv1D(2 * filters,
-                                             kernel_size,
-                                             strides=conv_stride,
-                                             padding=conv_border,
-                                             activation='relu',name="1DConv2")(x)
-    x = x[:,::2,:]
-
-    # Inputs to the model
-    x = tf.keras.layers.Conv1D(3 * filters,
-                                             kernel_size,
-                                             strides=conv_stride,
-                                             padding=conv_border,
-                                             activation='relu',name="1DConv3")(x)
-
-
+    for i in range(7):
+        #x = tf.keras.layers.Conv1D((i+2)*filters,
+        #                                         kernel_size,
+        #                                         strides=conv_stride,
+        #                                         padding=conv_border,
+        #                                         activation='relu',name="1DConv"+str(i+2))(x)
+        x = tf.layers.conv1d(x, filters * (i+2), kernel_size, strides=conv_strides, activation=LeakyReLU, padding=conv_border) # out = in - filter + 1
+        x = x[:,::2,:] # Decimate by factor of 2 # out = (in-1)/2 + 1
+    
+    '''
     lstm_layer = tf.keras.layers.LSTM(n_lstm_units,
                                            return_sequences=True,
                                            activation='tanh')
@@ -66,7 +58,14 @@ def build_model(Ly,Tx,nx,filters, kernel_size, conv_stride, conv_border, n_lstm_
                                                 go_backwards=True,
                                                 activation='tanh')
     x = tf.keras.layers.Bidirectional(lstm_layer, backward_layer=lstm_layer_back,name="blstm")(x)
-    
+    '''
+
+    # 
+    x = tf.keras.layers.Conv1D(n_dense_units,
+                                             1,
+                                             strides=conv_stride,
+                                             padding=conv_border,
+                                             activation='tanh',name="1DConvLast")(x)
     # Output layer
     x = tf.keras.layers.Dense(n_dense_units, activation="softmax", name="dense")(x)
 
@@ -84,18 +83,6 @@ def build_model(Ly,Tx,nx,filters, kernel_size, conv_stride, conv_border, n_lstm_
     return model
 
 
-
-def create_spectrogram(signals):
-    '''
-    function to create spectrogram from signals loaded from an audio file
-    :param signals:
-    :return:
-    '''
-    stfts = tf.signal.stft(signals, frame_length=200, frame_step=80, fft_length=256)
-    spectrograms = tf.math.pow(tf.abs(stfts), 0.5)
-    return spectrograms
-
-
 def generate_input_from_audio_file(path_to_audio_file, resample_to=8000):
     '''
     function to create input for our neural network from an audio file.
@@ -108,16 +95,13 @@ def generate_input_from_audio_file(path_to_audio_file, resample_to=8000):
     signal, sample_rate = librosa.core.load(path_to_audio_file)
     if signal.shape[0] == 2:
         signal = np.mean(signal, axis=0)
-    signal_resampled = librosa.core.resample(signal, sample_rate, resample_to)
-
-    # create spectrogram
-    X = create_spectrogram(signal_resampled)
-
+    X = librosa.core.resample(signal, sample_rate, resample_to)
+    X = np.reshape(X,(X.shape[0],1))
     # normalisation
-    means = tf.math.reduce_mean(X, 1, keepdims=True)
-    stddevs = tf.math.reduce_std(X, 1, keepdims=True)
-    X = tf.divide(tf.subtract(X, means), stddevs)
-    return X
+    #Xnorm = (X - np.min(X) ) / ((np.max(X)-np.min(X))+1e-10)
+    #Xnorm = np.reshape(Xnorm,(Xnorm.shape[0],1))
+    #return tf.convert_to_tensor(Xnorm)
+    return tf.convert_to_tensor(X)
 
 
 def generate_target_output_from_text(target_text):
@@ -207,8 +191,11 @@ if __name__ == '__main__':
         # 7. padding - 'valid' means no padding
         # 8. size of LSTM activation units
         # 9. size of dense unit on output (i.e. cooresponds to the size of the alphabet)
-        model = build_model(y.shape[1],X.shape[1],X.shape[2],24, 15, 1, 'valid', 200, 29)
+
+        model = build_model(y.shape[1],X.shape,24, 15, 1, 'same', 200, 29)
         model.summary()
+       
+        pdb.set_trace()
 
         epochs = 100
         early_stopping_patience = 10
