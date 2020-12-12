@@ -8,6 +8,8 @@ import re
 import DALI as dali_code
 from DALI import utilities
 
+import dali_helpers
+
 
 '''
 Take a single song and break up into ~10s chunks 
@@ -66,7 +68,7 @@ def download_song(song_id, dali_info, audio_path, sample_rate):
     sample_rate - (int) sampling rate used when converting to .wav
 
     Return:
-    N/A
+    full path to song
     '''
     basename = audio_path + '/' + song_id
 
@@ -88,7 +90,7 @@ def download_song(song_id, dali_info, audio_path, sample_rate):
     # remove mp3...
     print('Removing', basename + '.mp3')
     os.remove(basename + '.mp3')
-    return
+    return (audio_path+'/'+basename+'.wav')
 
 
 def save_samples_wav(song_id, audio_path, id_num, x, window_samples, sr):
@@ -126,17 +128,18 @@ def save_samples_wav(song_id, audio_path, id_num, x, window_samples, sr):
     # columns being the window (i.e. number of samples)
     # out = np.reshape(x[:-(n%samples)],(np.floor(n/samples).astype(int),samples))
 
-def append_transcript(full_filename,duration,transcript):
+def append_transcript_nemo(json_filename,audio_filename,duration,transcript):
     '''
     append_transcript: save in nemo manifest format
-       full_filename: absolute path to audio file
+       json_filename:  filename for appending
+       audio_filename: absolute path to audio file
        duration:      length of song at full_filename
        transcript:    lyrics corresponding to full_filename
     '''
-    jsonfile = open(filename, 'a')
+    jsonfile = open(json_filename, 'a')
     line_format = "{}\"audio_filepath\": \"{}\", \"duration\": {}, \"text\": \"{}\"{}"
     jsonfile.write(line_format.format(
-            "{", full_filename, duration, transcript, "}\n"))
+            "{", audio_filename, duration, transcript, "}\n"))
     jsonfile.close()
     return
 
@@ -151,6 +154,7 @@ def crop_song(song_id, audio_path, dali_entry, win_samples):
        win_samples - number of samples for each crop
     Return:
        song_ndx   - (m,start_sample,stop_sample) indices for the m crops
+       filename_list - absolute path for filenames saved with save_samples_wav
 
     1. load song with librosa
     2. calculate indices (i.e. sample index starting at 0) for windows of chunks. 
@@ -167,11 +171,11 @@ def crop_song(song_id, audio_path, dali_entry, win_samples):
     end_ndx   = start_ndx+win_samples
     l = start_ndx.shape[0]
 
+
+    filename_list = []
     for i in range(l):
-        save_samples_wav(song_id, audio_path, i, x, (start_ndx[i][0],end_ndx[i][0]), sr)
-
-
-
+        filename_list.append( save_samples_wav(song_id, audio_path, i, x, (start_ndx[i][0],end_ndx[i][0]), sr)[0] )
+    return np.concatenate((start_ndx,end_ndx),axis=1), filename_list
 
 
 def download_convert_song(song_id, dali_data, dali_info, audio_path):
@@ -290,7 +294,7 @@ def dali_setup():
     dali_info = dali_code.get_info(dali_path + '/info/DALI_DATA_INFO.gz')
     return dali_path, audio_path, dali_info
 
-def preprocess_song(song_id, dail_path, audio_path, dali_info, sample_rate):
+def preprocess_song(song_id, dali_path, audio_path, dali_info, nemo_manifest_filename, sample_rate):
     '''
     
     '''
@@ -305,11 +309,19 @@ def preprocess_song(song_id, dail_path, audio_path, dali_info, sample_rate):
         download_song(song_id, dali_info, audio_path, sample_rate)
 
         # slice up song and save to audio_path, return indices of samples
-        indices = crop_song(song_id, audio_path, dali_entry, win_samples)
+        song_ndx,filename_list = crop_song(song_id, audio_path, dali_entry, win_samples)
+        np.save(audio_path+'/'+song_id+'_crop_indices.npy',song_ndx)
 
         # slice up the transcript for each cropped version of the song
-        # calculate the duration
-        # save to 
+        dali_annot = dali_entry.annotations['annot']
+        transcript_list = dali_helpers.get_cropped_transcripts(dali_annot,song_ndx,sample_rate)
+
+        # save all cropped files in nemo format
+        for i in range(len(transcript_list)):
+            append_transcript_nemo(nemo_manifest_filename,filename_list[i],win_size,transcript_list[i])
+
+        
+
         return True
 
     return False
@@ -353,10 +365,15 @@ if __name__ == '__main__':
 
     #choose a random song...
     i = np.random.randint(n)
+
     song_id = os.path.relpath(allsongfilenames[i], dali_path).split('.')[0]
+
+    dali_entry = dali_code.get_the_DALI_dataset(dali_path, keep=[song_id])[song_id]
+    print('choosing index:',i,', title:',dali_entry.info['title'])
     
     #preprocess a song
-    if not preprocess_song(song_id, dali_path, audio_path, dali_info, sample_rate):
+    nemo_manifest_filename = 'dali_training.json'
+    if not preprocess_song(song_id, dali_path, audio_path, dali_info, nemo_manifest_filename, sample_rate):
         print('ERROR PREPROCESSING.')
 
 
